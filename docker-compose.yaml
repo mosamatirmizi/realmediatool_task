@@ -1,0 +1,90 @@
+version: '3.9'
+
+services:
+  # -------------------------------------
+  # PostgreSQL
+  # -------------------------------------
+  postgres:
+    image: postgres:17
+    container_name: psql_source
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres
+      POSTGRES_HOST_AUTH_METHOD: trust
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "postgres"]
+      interval: 5s
+      retries: 5
+
+  # -------------------------------------
+  # ClickHouse
+  # -------------------------------------
+  clickhouse:
+    image: clickhouse/clickhouse-server
+    container_name: ch_analytics
+    environment:
+      CLICKHOUSE_DB: rmt_db
+      CLICKHOUSE_USER: osama
+      CLICKHOUSE_PASSWORD: defaultpass    
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+    ports:
+      - "8123:8123"
+      - "9000:9000"
+    volumes:
+      - clickhouse_data:/var/lib/clickhouse
+    healthcheck:
+      test: ["CMD", "clickhouse-client", "--query", "SELECT 1"]
+      interval: 5s
+      retries: 5
+
+
+  # -------------------------------------
+  # Flyway Migrations
+  # -------------------------------------
+  flyway:
+    image: flyway/flyway
+    container_name: db_migrations
+    depends_on:
+      postgres:
+        condition: service_healthy
+        restart: true
+    command: -url=jdbc:postgresql://postgres:5432/rmt_db -user=postgres -locations=filesystem:/flyway/sql migrate
+    volumes:
+      - ./migrations/:/flyway/sql
+    environment:
+      FLYWAY_CONNECT_RETRIES: 10
+
+# Apache Airflow
+  airflow:
+    image: apache/airflow:2.9.1-python3.12
+    container_name: airflow
+    depends_on:
+      postgres:
+        condition: service_healthy
+      clickhouse:
+        condition: service_healthy
+    environment:
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__CORE__SQL_ALCHEMY_CONN: postgresql+psycopg2://postgres:postgres@127.0.0.1:5432/airflow
+      AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
+      AIRFLOW__WEBSERVER__SECRET_KEY: 'thisisaverysecretkey'
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - airflow_logs:/opt/airflow/logs
+    command: bash -c "airflow db upgrade && airflow users create -u osama -p defaultpass -r Admin -f admin -e osama_maud56@hotmail.com -l user && airflow webserver"
+
+volumes:
+  postgres_data:
+  clickhouse_data:
+  airflow_logs:
