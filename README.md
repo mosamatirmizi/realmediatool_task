@@ -1,6 +1,6 @@
-<<<<<<< HEAD
+
 # realmediatool_task
-=======
+
 # Data Engineering Task: AdTech Data Pipeline
 
 ## Overview
