@@ -20,109 +20,71 @@ Your challenge is to:
 3. **Develop queries** to calculate key advertising KPIs
 4. **Document your approach** and any assumptions made
 
-## Prerequisites
 
-* [uv](https://docs.astral.sh/uv/getting-started/installation/)
-* [docker](https://docs.docker.com/engine/install/)
-* [compose](https://docs.docker.com/compose/install/)
+# Solution
 
-## Setup & Environment
+## Design & Tech Stack
 
-This repository provides a complete environment to get started:
+I have tried to keep the design minimal. Applied Separation of Concern principal so each business entitiy i.e. Advertiser, Campaign 
+can be mmanaged independently. I avoided unnecessary complexity hence reviiewing will be easy to understand. During the planning my main focus 
+was on the aspects of pipeline design and data model flexibility. It's not a production level solution, however I have tried my best to address
+all the expected requirements somehow. 
 
-```bash
-# Install dependencies
-uv sync
+For the tech stack I only added an orchestration layer while designing the solutino around available tools.
+1. **Airfow** for orchestration
+2. **Postgres** for both RAW and Curation layer. [Note: Usualy we must have separate persistant storage]
+3. **Flyway** for schema initiaisation
+4. **Clickhouse** for analytical model.
 
-# Start all services
-docker-compose up -d
+## Assumptions
 
-# Wait a bit for services to initialize, then seed data
-uv run python main.py batch
-```
+As the data generation module was pre-provided, I assumed the data fed to the pipeline is accurate. I invested time to understand the source structure
+rather then data patterns. 
+In order to reproduce the solution, please ensure libraries are properly installed in docker container. I have added the commands in the docker compose file.
+I didn't use custom images hene the official image would be enough.
 
-## Data Model
+## Out Of Scope
 
-The source PostgreSQL database has the following schema:
+1. Quality Checks between Layers
+2. Checkpointing
+3. Caching
 
-- **advertiser**: Information about companies running ad campaigns
-- **campaign**: Ad campaigns configured with bid amounts and budgets  
-- **impressions**: Records of ads being displayed
-- **clicks**: Records of users clicking on ads
+
+## Data Models
+
+### Curation Layer
+
+For the curation layer, I have adopted the Data Vault 2.0 (DV2) modeling approach. Given the inevitability of schema evolution, 
+DV2 offers the flexibility to accommodate changes without compromising historical data integrity. 
+Additionally, it provides robust support for handling late-arriving data, ensuring consistency and completeness in our data warehouse.
 
 Detailed schema information can be found in `migrations/V1__create_schema.sql`.
 
-## Data Generation
 
-A data generator is provided to populate the source PostgreSQL database:
+### Analytical Layer
 
-```bash
-# Generate a complete batch of test data
-uv run python main.py batch --advertisers 5 --campaigns 3 --impressions 1000 --ctr 0.08
-# Add a single advertiser
-uv run python main.py advertisers --count 1
-# Add campaigns for an advertiser
-uv run python main.py campaigns --advertiser-id 1 --count 2
-# Add impressions for a campaign
-uv run python main.py impressions --campaign-id 1 --count 500
-# Add clicks for a campaign (based on existing impressions)
-uv run python main.py clicks --campaign-id 1 --ratio 0.12
-# View current data statistics
-uv run python main.py stats
-# Reset all data (use with caution)
-uv run python main.py reset
-```
+Since ClickHouse performs optimally with wide, denormalized tables and minimal joins, I have deployed a denormalized entity that 
+contains daily aggregates. This design significantly improves the performance of analytical queries by reducing query complexity 
+and leveraging ClickHouse’s columnar storage engine for faster data retrieval.
+Additionally, it minimizes I/O overhead by storing pre-aggregated metrics.
 
 ## Deliverables
 
-Please provide the following:
-
-1. **ClickHouse Schema**: SQL scripts to create your analytical tables
-2. **Data Pipeline**: Code and configuration to move data from PostgreSQL to ClickHouse
-3. **KPI Queries**: SQL queries to calculate the following metrics:
+1. **ClickHouse Schema**: SQL scripts can be found in ./migrations/clickhouse 
+2. **Data Pipeline**: Code can be found in ./dags/
+3. **KPI Queries**: SQL queries to calculate the requested metrics can be found in ./KPIs/
    - Click-Through Rate (CTR) by campaign
    - Daily impressions and clicks
-   - Anything else you might find itneresting
+   - Few other relevant KPIs
 4. **Documentation**: A README explaining your design decisions and how to run your solution
+
 
 ## Evaluation Criteria
 
-Your solution will be evaluated based on:
-
-- **Data modeling**: Appropriate schema design for analytical queries in ClickHouse
-- **Pipeline architecture**: Choice of tools, approach to data synchronization, and handling of updates
-- **Implementation quality**: Reliability, error handling, monitoring, and efficiency
-- **Query performance**: Efficient and accurate KPI calculations in ClickHouse
+- **Data modeling**: Data Vault 2.0 and Denormalised
+- **Pipeline architecture**: SoC principal, Utility Functions, Resillient to Multiple Triggers, Unit tests, RnD Notebook
+- **Implementation quality**: Proper Logging is implemented as per need.
+- **Query performance**: Time series Queries to be executed for the latest Clickhouse server
 - **Documentation**: Clear explanation of your approach, design decisions, and trade-offs
 - **Innovation**: Creative solutions to the data engineering challenges presented
 
-## Technical Requirements
-
-- Your solution should be containerized or have clear setup instructions
-- If using Python code, use Python 3.12+ and include dependency information
-- The pipeline should be able to handle both initial loads and incremental updates
-- All ClickHouse SQL must be compatible with the latest ClickHouse syntax
-- Your approach should consider performance, maintainability, and error handling
-
-## Getting Started
-
-1. Clone this repository
-2. Install dependencies: `uv sync`
-3. Start Docker containers: `docker-compose up -d`
-4. Populate test data: `uv run python main.py batch`
-5. Explore the sample data:
-   - Command line: `uv run python main.py stats`
-   - Web interfaces: pgAdmin and Tabix (see Database Access section)
-6. Design your ClickHouse schema
-7. Implement your ETL pipeline
-8. Develop and test your KPI queries
-9. Document your solution
-
-For local development:
-- View container status: `docker-compose ps`
-- View logs: `docker-compose logs`
-- Reset data: `uv run python main.py reset`
-- Stop services: `docker-compose down`
-
-Good luck!
->>>>>>> 07a2d14 (Initial commit)

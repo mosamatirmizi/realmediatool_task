@@ -1,6 +1,7 @@
 apache-airflow
-pandas
+pandas==2.1.4
 SQLAlchemy
 psycopg2-binary
 pytest 
 pytest-mock
+clickhouse-connect

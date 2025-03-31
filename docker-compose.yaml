@@ -17,6 +17,8 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
     healthcheck:
       test: ["CMD", "pg_isready", "-U", "postgres"]
       interval: 5s
@@ -41,6 +43,8 @@ services:
       - "9000:9000"
     volumes:
       - clickhouse_data:/var/lib/clickhouse
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
     healthcheck:
       test: ["CMD", "clickhouse-client", "--query", "SELECT 1"]
       interval: 5s
@@ -57,14 +61,38 @@ services:
       postgres:
         condition: service_healthy
         restart: true
-    command: -url=jdbc:postgresql://postgres:5432/rmt_db -user=postgres -locations=filesystem:/flyway/sql migrate
+    command: -url=jdbc:postgresql://postgres:5432/rmt_db -user=postgres -locations=filesystem:/flyway/sql/postgres migrate
     volumes:
       - ./migrations/:/flyway/sql
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
     environment:
       FLYWAY_CONNECT_RETRIES: 10
+    
+  flyway_clickhouse:
+    image: flyway/flyway
+    container_name: flyway_clickhouse
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+        restart: true
+    command: >
+      -url=jdbc:clickhouse://clickhouse:8123/rmt_db
+      -user=osama
+      -password=defaultpass
+      -locations=filesystem:/flyway/sql/clickhouse
+      migrate
+    volumes:
+      - ./migrations:/flyway/sql
+      - ./drivers/clickhouse-client-0.8.2.jar:/flyway/drivers/clickhouse-client-0.8.2.jar
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
+    environment:
+      FLYWAY_CONNECT_RETRIES: 10
+  
 
 # Apache Airflow
-  airflow:
+  airflow_webserver:
     image: apache/airflow:2.9.1-python3.12
     container_name: airflow
     depends_on:
@@ -74,15 +102,38 @@ services:
         condition: service_healthy
     environment:
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
-      AIRFLOW__CORE__SQL_ALCHEMY_CONN: postgresql+psycopg2://postgres:postgres@127.0.0.1:5432/airflow
+      AIRFLOW__CORE__SQL_ALCHEMY_CONN: postgresql+psycopg2://postgres:postgres@postgres:5432/airflow
       AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
       AIRFLOW__WEBSERVER__SECRET_KEY: 'thisisaverysecretkey'
+      AIRFLOW__CORE__DEFAULT_TIMEZONE: 'europe/berlin'
+      PYTHONPATH: /opt/airflow/dags
     ports:
       - "8080:8080"
     volumes:
       - ./dags:/opt/airflow/dags
       - airflow_logs:/opt/airflow/logs
-    command: bash -c "airflow db upgrade && airflow users create -u osama -p defaultpass -r Admin -f admin -e osama_maud56@hotmail.com -l user && airflow webserver"
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
+    command: bash -c "pip install --no-cache-dir -r /opt/airflow/dags/requirements.txt && airflow db upgrade && airflow users create -u osama -p defaultpass -r Admin -f admin -e osama_maud56@hotmail.com -l user && airflow webserver"
+
+  airflow_scheduler:
+    image: apache/airflow:2.9.1-python3.12
+    container_name: airflow_scheduler
+    environment:
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__CORE__SQL_ALCHEMY_CONN: postgresql+psycopg2://postgres:postgres@postgres:5432/airflow
+      AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
+      AIRFLOW__CORE__DEFAULT_TIMEZONE: 'europe/berlin'
+      PYTHONPATH: /opt/airflow/dags
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - airflow_logs:/opt/airflow/logs
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
+    command: airflow scheduler
+    depends_on:
+      postgres:
+        condition: service_started
 
 volumes:
   postgres_data:
