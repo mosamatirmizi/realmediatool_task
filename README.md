@@ -27,8 +27,8 @@ Your challenge is to:
 
 I have tried to keep the design minimal. Applied Separation of Concern principal so each business entitiy i.e. Advertiser, Campaign 
 can be mmanaged independently. I avoided unnecessary complexity hence reviiewing will be easy to understand. During the planning my main focus 
-was on the aspects of pipeline design and data model flexibility. It's not a production level solution, however I have tried my best to address
-all the expected requirements somehow. 
+was on the key aspects of pipeline design and data model flexibility. 
+Please note that it's not a production grade solution, however, I have tried my best to address all the expected requirements till some extent. 
 
 For the tech stack I only added an orchestration layer while designing the solutino around available tools.
 1. **Airfow** for orchestration
@@ -38,7 +38,7 @@ For the tech stack I only added an orchestration layer while designing the solut
 
 ## Assumptions
 
-As the data generation module was pre-provided, I assumed the data fed to the pipeline is accurate. I invested time to understand the source structure
+As the data generation module was pre-provided, I assumed the data fed to the pipeline was accurate. I invested time to understand the source structure
 rather then data patterns. 
 In order to reproduce the solution, please ensure libraries are properly installed in docker container. I have added the commands in the docker compose file.
 I didn't use custom images hene the official image would be enough.
